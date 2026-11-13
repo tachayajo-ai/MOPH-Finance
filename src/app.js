@@ -22,6 +22,26 @@
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
+  // ------------------------------------------------------------ theme (auto → สว่าง → มืด)
+  var THEMES = { auto: { next: "light", icon: "◐", label: "ตามเครื่อง" }, light: { next: "dark", icon: "☀", label: "สว่าง" }, dark: { next: "auto", icon: "☾", label: "มืด" } };
+  function applyTheme() {
+    var t = THEMES[S.theme] ? S.theme : "auto", root = document.documentElement;
+    if (t === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", t);
+    Array.prototype.forEach.call(document.querySelectorAll("[data-theme-btn]"), function (b) {
+      b.innerHTML = '<span aria-hidden="true">' + THEMES[t].icon + "</span><span>" + THEMES[t].label + "</span>";
+      b.setAttribute("aria-label", "ธีม: " + THEMES[t].label + " — กดเพื่อเปลี่ยนเป็น" + THEMES[THEMES[t].next].label);
+      b.title = "สลับธีม (ตอนนี้: " + THEMES[t].label + ")";
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-theme-btn]");
+    if (!b) return;
+    var t = THEMES[S.theme] ? S.theme : "auto";
+    S.theme = THEMES[t].next; save(); applyTheme();
+    if (typeof drawMindmaps === "function") setTimeout(function () { drawMindmaps(); }, 30);
+  });
+  applyTheme();
+
   // ------------------------------------------------------------ helpers
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }

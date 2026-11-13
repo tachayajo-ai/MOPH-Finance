@@ -292,3 +292,13 @@ textarea.copybox { width: 100%; min-height: 120px; font-family: var(--f-num); fo
   .mm-root { border-radius: 12px; width: 100%; }
   .mm-col { gap: 10px; padding-left: 14px; border-left: 2px solid var(--line); }
 }
+
+/* ---------- theme toggle ---------- */
+.brand-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.row-end { display: inline-flex; align-items: center; gap: 8px; }
+.theme-btn { display: inline-flex; align-items: center; gap: 5px; flex: none; min-height: 34px; padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink);
+  font-size: .8rem; cursor: pointer; }
+.theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+.theme-btn span[aria-hidden] { font-size: 1rem; line-height: 1; }
+@media (max-width: 400px) { .theme-btn span:not([aria-hidden]) { display: none; } }
