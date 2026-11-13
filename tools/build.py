@@ -53,15 +53,17 @@ def main():
     criteria = json.loads(read("data/criteria.json"))
     quiz = json.loads(read("data/quiz.json"))
     glossary = json.loads(read("data/glossary.json"))
+    casestudy = json.loads(read("data/casestudy.json"))
     glossary["terms"] = textbook_glossary(textbook) + glossary["terms"]
 
-    for name, text in (("textbook.md", textbook), ("manual.html", manual)):
+    for name, text in (("textbook.md", textbook), ("manual.html", manual),
+                       ("casestudy.json", json.dumps(casestudy, ensure_ascii=False))):
         check_pdpa(text, name)
 
     # ตรวจว่าเกณฑ์ทุกตัวมีแหล่งอ้างอิง
     srcs = criteria["sources"]
     for item in criteria["ratios"] + criteria["efficiency"]:
-        if item.get("src") not in srcs:
+        if item.get("src") not in srcs or item.get("src_also", item["src"]) not in srcs:
             sys.exit(f"criteria.json: {item.get('id')} ไม่มีแหล่งอ้างอิงที่ถูกต้อง")
 
     data = {
@@ -70,6 +72,7 @@ def main():
         "criteria": criteria,
         "quiz": quiz,
         "glossary": glossary,
+        "casestudy": casestudy,
         "meta": {
             "textbook": "ตำรางบการเงินโรงพยาบาล สำหรับงานประกันสุขภาพ (เรียนด้วยตนเอง) 12 พ.ย. 2569",
             "manual": "ระบบประกันสุขภาพ โรงพยาบาลรัฐ — คู่มือปฏิบัติงานระดับจังหวัด ฉบับปรับปรุง ต.ค. 2569",

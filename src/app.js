@@ -198,6 +198,7 @@
     { id: "glossary", label: "อภิธานศัพท์", grp: "เรียน" },
     { id: "ratio", label: "Ratio + Risk Score", grp: "ฝึกคำนวณ" },
     { id: "acp", label: "ACP Cash Unlock", grp: "ฝึกคำนวณ" },
+    { id: "case", label: "กรณีศึกษา 21 รพ.", grp: "ฝึกคำนวณ" },
     { id: "quiz", label: "แบบทดสอบ", grp: "ทบทวน" },
     { id: "cards", label: "Flashcards", grp: "ทบทวน" },
     { id: "plan", label: "Action plan", grp: "ลงมือทำ" },
@@ -278,6 +279,7 @@
       '<section class="stack"><h2 style="font-size:1.1rem">เครื่องมือฝึก</h2><div class="tool-links">' +
       '<a href="#ratio"><b>Ratio + Risk Score</b><span>CR · QR · Cash · NWC · NI → ระดับ 0–7</span></a>' +
       '<a href="#acp"><b>ACP Cash Unlock</b><span>ลด ACP กี่วัน ได้เงินสดคืนเท่าไร</span></a>' +
+      '<a href="#case"><b>กรณีศึกษา 21 รพ.</b><span>ข้อมูลจริง มิ.ย. 69 · ฝึกทาย Risk Score</span></a>' +
       '<a href="#quiz"><b>แบบทดสอบ</b><span>แนวคิด · เกณฑ์ตัวเลข · ศัพท์</span></a>' +
       '<a href="#cards"><b>Flashcards</b><span>' + GL.length + " คำ 12 หมวด</span></a>" +
       '<a href="#manual"><b>คู่มือประกันสุขภาพ</b><span>กองทุน · DRG · เคลม · ม.41 · หนังสือ</span></a>' +
@@ -382,6 +384,14 @@
     r.niMonth = r.NI / months;
     r.expMonth = n.exp / months;
     r.niBeforeDep = r.NI + (n.dep || 0);
+    var res = scoreRatios(r, months);
+    r.reserveMonths = r.NWC / r.expMonth;
+    res.n = n; res.r = r;
+    return res;
+  }
+  // คะแนน Risk Score จาก Ratio (ใช้ทั้งเครื่องคิดเลขและกรณีศึกษา) — r ต้องมี CR, QR, CASH, NWC, NI
+  function scoreRatios(r, months) {
+    r.niMonth = r.NI / months;
     var pts = { liquid: 0, status: 0, survival: 0 }, rows = [];
     C.ratios.forEach(function (c) {
       var val = r[c.id], fail = null;
@@ -407,8 +417,7 @@
     }
     var allKnown = rows.every(function (x) { return x.fail !== null; }) && surv.score !== null;
     var total = pts.liquid + pts.status + pts.survival;
-    r.reserveMonths = r.NWC / r.expMonth;
-    return { n: n, r: r, rows: rows, pts: pts, surv: surv, total: total, complete: allKnown };
+    return { rows: rows, pts: pts, surv: surv, total: total, complete: allKnown };
   }
   function levelOf(score) { return C.levels.filter(function (l) { return score >= l.min && score <= l.max; })[0]; }
   function mgmtOf(score) { return C.management.filter(function (l) { return score >= l.min && score <= l.max; })[0]; }
@@ -417,6 +426,14 @@
     var v = S.calc || CALC_SAMPLE;
     var isSample = !S.calc;
     var inputs = CALC_FIELDS.map(function (f) {
+      if (f.id === "months") {
+        var m = String(parseNum(v.months));
+        return '<div class="field"><label for="c_period">งวดของงบ (ปีงบประมาณเริ่ม 1 ต.ค.)</label><div class="row" style="flex-wrap:nowrap">' +
+          '<select id="c_period" style="flex:1;min-width:0">' + [["3", "Q1 · ต.ค.–ธ.ค. (3 เดือน)"], ["6", "Q2 · ต.ค.–มี.ค. (6 เดือน)"], ["9", "Q3 · ต.ค.–มิ.ย. (9 เดือน)"], ["12", "Q4 / ทั้งปี (12 เดือน)"], ["", "กำหนดเอง"]].map(function (o) {
+            return '<option value="' + o[0] + '"' + ((o[0] === m) || (o[0] === "" && ["3", "6", "9", "12"].indexOf(m) < 0) ? " selected" : "") + ">" + o[1] + "</option>";
+          }).join("") + '</select><input class="num" id="c_months" inputmode="decimal" autocomplete="off" aria-label="จำนวนเดือนของงวด" style="width:4.5em" value="' + esc(v.months || "") + '"></div>' +
+          '<span class="hint">NI สะสมตั้งแต่ต้นปีงบ ÷ จำนวนเดือน = NI เฉลี่ยต่อเดือน (ใช้ในมิติระยะเวลาทุนหมด)</span></div>';
+      }
       return '<div class="field"><label for="c_' + f.id + '">' + esc(f.label) + (f.small ? "" : " (บาท)") + "</label>" +
         '<input class="num" id="c_' + f.id + '" inputmode="decimal" autocomplete="off" value="' + esc(v[f.id] || "") + '"></div>';
     }).join("");
@@ -472,6 +489,8 @@
     CALC_FIELDS.forEach(function (f) {
       $("#c_" + f.id, root).addEventListener("input", function () { S.calc = read(); save(); $("#sampleTag", root).innerHTML = ""; draw(); });
     });
+    $("#c_period", root).onchange = function (e) { if (e.target.value) { var mi = $("#c_months", root); mi.value = e.target.value; mi.dispatchEvent(new Event("input")); } };
+    $("#c_months", root).addEventListener("input", function (e) { var sel = $("#c_period", root), val = String(parseNum(e.target.value)); sel.value = ["3", "6", "9", "12"].indexOf(val) >= 0 ? val : ""; });
     $("#cSample", root).onclick = function () { S.calc = null; save(); route(); };
     $("#cClear", root).onclick = function () { var o = {}; CALC_FIELDS.forEach(function (f) { o[f.id] = f.id === "months" ? "12" : ""; }); S.calc = o; save(); route(); };
     draw();
@@ -545,6 +564,10 @@
     qs.push({ q: "TPS คะแนนเต็มเท่าใด", choices: ["15", "7", "10", "100"], answer: 0, why: "ตัวอย่าง จ.สกลนคร กำหนดผ่านที่ 10.5", ref: "criteria [S3]", crit: true });
     qs.push({ q: "เป้าหมายประเทศ ปีงบ 67–71 สำหรับ รพ. Risk Score ระดับ 7", choices: ["ไม่เกินร้อยละ 2", "ไม่เกินร้อยละ 4", "ไม่เกินร้อยละ 5", "ไม่เกินร้อยละ 10"], answer: 0, why: C.national_target.text, ref: "criteria [S1]", crit: true });
     qs.push({ q: "ตัวอย่าง จ.กาฬสินธุ์ ยอมให้รายได้/ค่าใช้จ่ายจริงต่างจาก Planfin ได้ไม่เกินเท่าใด", choices: ["ร้อยละ 5", "ร้อยละ 10", "ร้อยละ 2", "ร้อยละ 15"], answer: 0, why: "เกณฑ์ตัวอย่างระดับจังหวัด ไม่ใช่เกณฑ์ประเทศ", ref: "criteria [S6]", crit: true });
+    qs.push({ q: "จ.อุดรธานีใช้เกณฑ์อัตราครองเตียงเท่าใด (กวป. ก.ค. 69)", choices: ["≥ 80%", "≥ 70%", "≥ 85%", "≥ 90%"], answer: 0, why: "มิ.ย. 69 ผ่าน 14 จาก 21 แห่ง", ref: "criteria [K1]", crit: true });
+    qs.push({ q: "เกณฑ์ CMI ของ รพ.ชุมชนระดับ F1–F3 ที่ใช้ใน กวป. ก.ค. 69", choices: ["≥ 0.6", "≥ 0.8", "≥ 1.0", "≥ 1.2"], answer: 0, why: "A ≥ 1.6 · S ≥ 1.2 · M2 ≥ 0.8 · F ≥ 0.6", ref: "criteria [K1]", crit: true });
+    qs.push({ q: "Planfin ไตรมาส 3 ใช้ “ค่าที่ควรเป็นตามแผน” คำนวณอย่างไร", choices: ["แผนทั้งปี ÷ 12 × 9", "แผนทั้งปี × 75% + 5%", "ผลจริงปีก่อน × 9/12", "แผนทั้งปี ÷ 4 × 3 − 5%"], answer: 0, why: "แล้วเทียบผลจริง ต่างได้ไม่เกิน ±5%", ref: "criteria [K1]", crit: true });
+    qs.push({ q: "รพ. RS เกณฑ์กระทรวง = 3 แต่ RS เขต 8 (NI) = 7 สาเหตุที่เป็นไปได้มากที่สุดคือ", choices: ["เกณฑ์เขต 8 ใช้งบที่ปรับแล้ว ทำให้ CR/NWC/NI ต่ำกว่า", "เขต 8 ใช้คะแนนเต็ม 10", "เกณฑ์กระทรวงไม่นับ Cash Ratio", "ข้อมูลคนละปีงบ"], answer: 0, why: C.rs_variants.text, ref: "criteria [K1]", crit: true });
     return qs;
   }
   function glossaryQuestions(n) {
@@ -759,6 +782,180 @@
     check();
   };
 
+  // ------------------------------------------------------------ CASE STUDY (ข้อมูลจริง 21 รพ. ชื่อเป็นรหัส)
+  var CS = D.casestudy, HS = CS.hospitals;
+  var caseTab = "practice", casePick = null, caseReveal = false, caseGuess = { li: "", st: "", su: "" }, caseSort = { k: "code", dir: 1 }, caseDetail = 0;
+  function mb(x) { return isFinite(x) ? fmtBaht(x / 1e6, 2) : "—"; }
+  function negCls(x) { return x < 0 ? " neg" : ""; }
+  function rsPill(rs) { var t = rs >= 6 ? "crit" : rs >= 4 ? "watch" : rs >= 2 ? "" : "ok"; return '<span class="tag ' + t + ' num">' + rs + "</span>"; }
+  function k1() { return '<span class="src" title="' + esc(CS.source.title) + '">[K1]</span>'; }
+  function pickRandom() { var c; do { c = Math.floor(Math.random() * HS.length); } while (HS.length > 1 && c === casePick); casePick = c; caseReveal = false; caseGuess = { li: "", st: "", su: "" }; }
+  function caseScore(h) {
+    var m = h.moph;
+    return scoreRatios({ CR: m.cr, QR: m.qr, CASH: m.cash, NWC: m.nwc, NI: m.ni }, CS.months);
+  }
+  function trendSvg(h) {
+    var lab = CS.trend_labels, a = h.trend.nwc, b = h.trend.net, all = a.concat(b, [0]);
+    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all); if (hi === lo) hi = lo + 1;
+    var pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+    var W = 640, H = 230, L = 64, R = 16, T = 14, B = 34;
+    function x(i) { return L + i * (W - L - R) / (lab.length - 1); }
+    function y(v) { return T + (hi - v) * (H - T - B) / (hi - lo); }
+    function path(s) { return s.map(function (v, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1); }).join(" "); }
+    var ticks = [lo + pad, 0, hi - pad].filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+    var g = ticks.map(function (v) { return '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--line)" stroke-width="1"' + (v === 0 ? "" : ' stroke-dasharray="3 4"') + '/><text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-num)">' + fmtBaht(v, 1) + "</text>"; }).join("");
+    var xl = lab.map(function (t, i) { return '<text x="' + x(i) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="11" fill="var(--muted)">' + t + "</text>"; }).join("");
+    function dots(s, col) { return s.map(function (v, i) { return '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="' + (i === s.length - 1 ? 4.5 : 3) + '" fill="' + col + '"/>'; }).join(""); }
+    return '<svg viewBox="0 0 ' + W + " " + H + '" width="100%" role="img" aria-label="แนวโน้ม NWC และเงินบำรุงหลังหักหนี้ ล้านบาท">' + g + xl +
+      '<path d="' + path(a) + '" fill="none" stroke="var(--accent)" stroke-width="2.5"/>' + dots(a, "var(--accent)") +
+      '<path d="' + path(b) + '" fill="none" stroke="var(--warn)" stroke-width="2.5" stroke-dasharray="6 4"/>' + dots(b, "var(--warn)") + "</svg>" +
+      '<div class="row small"><span><b style="color:var(--accent)">━</b> NWC</span><span><b style="color:var(--warn)">╍</b> เงินบำรุงคงเหลือหลังหักหนี้</span><span class="muted">หน่วย ล้านบาท · ' + esc(CS.pages.trend) + " " + k1() + "</span></div>";
+  }
+  RENDER["case"] = function () {
+    var tabs = [["practice", "ฝึกทาย Risk Score"], ["table", "ภาพรวม 21 แห่ง"], ["detail", "ดูราย รพ."]];
+    var head = '<div class="page-head"><span class="eyebrow">ข้อมูลจริง · ' + esc(CS.source.asof.replace(/^ข้อมูล /, "")) + '</span><h1>กรณีศึกษา 21 รพ. จังหวัดอุดรธานี</h1>' +
+      "<p>ตัวเลขจากสไลด์ กวป. ก.ค. 69 " + k1() + " · ชื่อโรงพยาบาลเปลี่ยนเป็นรหัส รพ.01–21 (สุ่ม ไม่เรียงตามขนาด) · " + esc(CS.source.note) + "</p></div>" +
+      '<div class="row" role="tablist">' + tabs.map(function (t) { return '<button class="btn' + (caseTab === t[0] ? " primary" : "") + '" data-ctab="' + t[0] + '" role="tab" aria-selected="' + (caseTab === t[0]) + '">' + t[1] + "</button>"; }).join("") + "</div>";
+    if (caseTab === "practice") return head + casePractice();
+    if (caseTab === "table") return head + caseTable();
+    return head + caseDetailView();
+  };
+  function casePractice() {
+    if (casePick === null) pickRandom();
+    var h = HS[casePick], m = h.moph, done = S.caseDone || {};
+    var nDone = Object.keys(done).length, nRight = Object.keys(done).filter(function (k) { return done[k]; }).length;
+    function sel(id, max) { var o = '<option value="">?</option>'; for (var i = 0; i <= max; i++) o += "<option" + (String(caseGuess[id]) === String(i) ? " selected" : "") + ">" + i + "</option>"; return '<select id="g_' + id + '" class="inp" style="width:5em"' + (caseReveal ? " disabled" : "") + ">" + o + "</select>"; }
+    var card = '<section class="sheet stack"><div class="row" style="justify-content:space-between"><h2 style="margin:0">' + esc(h.code) + ' <span class="tag">ระดับ ' + esc(h.prod.level) + "</span></h2>" +
+      '<span class="small muted">ทำแล้ว <span class="num">' + nDone + "/21</span> · ถูก <span class=\"num\">" + nRight + "</span></span></div>" +
+      '<div class="scroll-x"><table><tbody>' +
+      "<tr><td>Current Ratio</td><td class=\"r num\">" + m.cr.toFixed(2) + "</td><td>Quick Ratio</td><td class=\"r num\">" + m.qr.toFixed(2) + "</td></tr>" +
+      "<tr><td>Cash Ratio</td><td class=\"r num\">" + m.cash.toFixed(2) + "</td><td>NWC (ล้านบาท)</td><td class=\"r num" + negCls(m.nwc) + "\">" + mb(m.nwc) + "</td></tr>" +
+      "<tr><td>NI สะสม 9 เดือน (ล้านบาท)</td><td class=\"r num" + negCls(m.ni) + "\">" + mb(m.ni) + "</td><td>NI เฉลี่ยต่อเดือน</td><td class=\"r num" + negCls(m.ni) + "\">" + mb(m.ni / CS.months) + "</td></tr>" +
+      "</tbody></table></div>" +
+      '<p class="small muted">โจทย์: คิดคะแนน Risk Score เกณฑ์กระทรวง (NI) ทีละมิติ แล้วกดตรวจ — เปิดตารางเกณฑ์ได้ที่ <a href="#sources">เกณฑ์และแหล่งอ้างอิง</a></p>' +
+      '<div class="breakdown"><div><div class="small muted">สภาพคล่อง (0–3)</div>' + sel("li", 3) + '</div><div><div class="small muted">ความมั่นคง (0–2)</div>' + sel("st", 2) + '</div><div><div class="small muted">ระยะเวลาทุนหมด (0–2)</div>' + sel("su", 2) + "</div></div>" +
+      '<div class="row">' + (caseReveal ? "" : '<button class="btn primary" id="gCheck">ตรวจคำตอบ</button>') + '<button class="btn" id="gNext">สุ่ม รพ. ถัดไป →</button></div><div id="gOut">' + (caseReveal ? caseAnswer(h) : "") + "</div></section>";
+    return card;
+  }
+  function caseAnswer(h) {
+    var res = caseScore(h), m = h.moph, g = caseGuess;
+    var mine = [Number(g.li), Number(g.st), Number(g.su)], truth = [m.li, m.st, m.su];
+    var why = [
+      res.rows.filter(function (x) { return x.c.group === "liquid"; }).map(function (x) { return (x.c.id === "CASH" ? "Cash" : x.c.id) + " " + fmtR(x.val) + (x.fail ? " < " + x.c.threshold.toFixed(1) + " (+1)" : " ผ่าน"); }).join(" · "),
+      "NWC " + (m.nwc < 0 ? "ติดลบ (+1)" : "บวก") + " · NI " + (m.ni < 0 ? "ติดลบ (+1)" : "บวก"),
+      res.surv.rule.label + (isFinite(res.surv.months) ? " · " + fmtR(res.surv.months) + " เดือน" : "")
+    ];
+    var names = ["สภาพคล่อง", "ความมั่นคง", "ระยะเวลาทุนหมด"];
+    var rows = names.map(function (n, i) {
+      var ok = mine[i] === truth[i];
+      return "<tr><td>" + n + '</td><td class="num">' + (isNaN(mine[i]) ? "?" : mine[i]) + '</td><td class="num"><b>' + truth[i] + "</b></td><td>" + (ok ? '<span class="pill pass">ถูก</span>' : '<span class="pill fail">ทบทวน</span>') + '</td><td class="small">' + esc(why[i]) + "</td></tr>";
+    }).join("");
+    var tot = mine[0] + mine[1] + mine[2];
+    var lv = levelOf(m.rs);
+    return '<div class="scroll-x"><table><thead><tr><th>มิติ</th><th>คุณตอบ</th><th>เฉลย</th><th></th><th>เหตุผล</th></tr></thead><tbody>' + rows +
+      '<tr><td><b>รวม</b></td><td class="num">' + (isNaN(tot) ? "?" : tot) + '</td><td class="num"><b>' + m.rs + '</b></td><td></td><td class="small">' + esc(lv.meaning) + " " + srcTag(C.levels_src) + "</td></tr></tbody></table></div>" +
+      '<p class="small">เฉลยตามต้นฉบับ ' + esc(CS.pages.moph) + " " + k1() + (res.total === m.rs ? " · สูตรในแอปได้ค่าเดียวกัน" : ' · <b class="neg">สูตรในแอปได้ ' + res.total + "</b>") + "</p>" +
+      '<p class="notice info small">เกณฑ์เดียวกัน แต่งบที่ปรับแบบเขต 8: RS เขต 8 (NI) = <b>' + h.r8ni.rs + "</b> · RS เขต 8 (EBITDA) = <b>" + h.r8eb.rs + "</b> (CR " + h.r8ni.cr.toFixed(2) + ", NWC " + mb(h.r8ni.nwc) + " ลบ.) · เงินบำรุงหลังหักหนี้ <b class=\"num" + negCls(h.netCash) + '">' + mb(h.netCash) + "</b> ลบ. — " + esc(C.rs_variants.open_question) + "</p>";
+  }
+  var CASE_COLS = [
+    { k: "code", t: "รหัส", v: function (h) { return h.code; }, f: function (h) { return '<a href="#case" data-cdet="' + HS.indexOf(h) + '"><b>' + esc(h.code) + "</b></a>"; } },
+    { k: "lv", t: "ระดับ", v: function (h) { return h.prod.level; }, f: function (h) { return esc(h.prod.level); } },
+    { k: "rs", t: "RS กระทรวง", v: function (h) { return h.moph.rs; }, f: function (h) { return rsPill(h.moph.rs); } },
+    { k: "r8", t: "RS เขต 8 (NI)", v: function (h) { return h.r8ni.rs; }, f: function (h) { return rsPill(h.r8ni.rs); } },
+    { k: "r8e", t: "RS เขต 8 (EBITDA)", v: function (h) { return h.r8eb.rs; }, f: function (h) { return rsPill(h.r8eb.rs); } },
+    { k: "nwc", t: "NWC ลบ.", r: 1, v: function (h) { return h.moph.nwc; }, f: function (h) { return '<span class="num' + negCls(h.moph.nwc) + '">' + mb(h.moph.nwc) + "</span>"; } },
+    { k: "ni", t: "NI ลบ.", r: 1, v: function (h) { return h.moph.ni; }, f: function (h) { return '<span class="num' + negCls(h.moph.ni) + '">' + mb(h.moph.ni) + "</span>"; } },
+    { k: "eb", t: "EBITDA ลบ.", r: 1, v: function (h) { return h.ebitda; }, f: function (h) { return '<span class="num' + negCls(h.ebitda) + '">' + mb(h.ebitda) + "</span>"; } },
+    { k: "net", t: "เงินบำรุงหลังหักหนี้ ลบ.", r: 1, v: function (h) { return h.netCash; }, f: function (h) { return '<span class="num' + negCls(h.netCash) + '">' + mb(h.netCash) + "</span>"; } },
+    { k: "p7", t: "7 Plus", v: function (h) { return h.plus7.grade; }, f: function (h) { return '<span class="pill ' + (h.plus7.pass ? "pass" : "fail") + '">' + esc(h.plus7.grade) + "</span>"; } },
+    { k: "acp", t: "ACP-UC วัน", r: 1, v: function (h) { return h.plus7.acpUC; }, f: function (h) { return '<span class="num' + (h.plus7.acpUC > 60 ? " neg" : "") + '">' + h.plus7.acpUC + "</span>"; } },
+    { k: "app", t: "APP วัน", r: 1, v: function (h) { return h.plus7.app; }, f: function (h) { return '<span class="num">' + h.plus7.app + "</span>"; } },
+    { k: "tps", t: "TPS", r: 1, v: function (h) { return h.tps.score; }, f: function (h) { return '<span class="num' + (h.tps.score < 10.5 ? " neg" : "") + '">' + h.tps.score + " " + h.tps.q2 + "</span>"; } },
+    { k: "pf", t: "Planfin รายได้ %", r: 1, v: function (h) { return h.planfin.revPct; }, f: function (h) { return '<span class="num' + (Math.abs(h.planfin.revPct) > 5 ? " neg" : "") + '">' + h.planfin.revPct.toFixed(2) + "</span>"; } },
+    { k: "occ", t: "ครองเตียง %", r: 1, v: function (h) { return h.prod.occ; }, f: function (h) { return '<span class="num' + (h.prod.occ < 80 ? " neg" : "") + '">' + h.prod.occ.toFixed(1) + "</span>"; } },
+    { k: "cmi", t: "CMI", r: 1, v: function (h) { return h.prod.cmi; }, f: function (h) { return '<span class="num' + (h.prod.cmi < h.prod.cmiCrit ? " neg" : "") + '">' + h.prod.cmi.toFixed(3) + "</span>"; } },
+    { k: "c", t: "ติด C สะสม", r: 1, v: function (h) { return h.claimC; }, f: function (h) { return '<span class="num">' + fmtBaht(h.claimC) + "</span>"; } }
+  ];
+  function caseTable() {
+    var col = CASE_COLS.filter(function (c) { return c.k === caseSort.k; })[0];
+    var list = HS.slice().sort(function (a, b) { var x = col.v(a), y = col.v(b); return (x > y ? 1 : x < y ? -1 : 0) * caseSort.dir; });
+    var rs67 = HS.filter(function (h) { return h.moph.rs >= 6; }).length, r867 = HS.filter(function (h) { return h.r8ni.rs >= 6 || h.r8eb.rs >= 6; }).length;
+    var negNet = HS.filter(function (h) { return h.netCash < 0; }).length;
+    var hidden = HS.filter(function (h) { return h.moph.rs <= 2 && h.netCash < 0; }).map(function (h) { return h.code; });
+    var ebPos = HS.filter(function (h) { return h.ebitda > 0; }).length;
+    return '<div class="grid3">' +
+      '<div class="sheet stat"><b>' + rs67 + " → " + r867 + '</b><div class="small muted">รพ. ระดับ 6–7 เกณฑ์กระทรวง → เกณฑ์เขต 8 (อย่างน้อย 1 เกณฑ์)</div></div>' +
+      '<div class="sheet stat"><b>' + negNet + '/21</b><div class="small muted">เงินบำรุงหลังหักหนี้ติดลบ ทั้งที่ EBITDA เป็นบวก ' + ebPos + " แห่ง</div></div>" +
+      '<div class="sheet stat"><b>' + hidden.length + '</b><div class="small muted">RS กระทรวง ≤ 2 แต่เงินบำรุงติดลบ (ตำราบทที่ 5.3: Risk ต่ำซ่อนปัญหา)</div></div></div>' +
+      '<section class="sheet stack"><div class="row" style="justify-content:space-between"><h2 style="margin:0">ตารางรวม</h2><span class="small muted">แตะหัวคอลัมน์เพื่อเรียง · แตะรหัสเพื่อดูรายละเอียด · ตัวแดง = ไม่ผ่าน/ติดลบ</span></div>' +
+      '<div class="scroll-x"><table class="small"><thead><tr>' + CASE_COLS.map(function (c) {
+        return '<th class="' + (c.r ? "r" : "") + '"><button class="btn ghost" style="padding:2px 4px;border:0;font-size:inherit;color:inherit" data-csort="' + c.k + '">' + esc(c.t) + (caseSort.k === c.k ? (caseSort.dir > 0 ? " ▲" : " ▼") : "") + "</button></th>";
+      }).join("") + "</tr></thead><tbody>" + list.map(function (h) { return "<tr>" + CASE_COLS.map(function (c) { return '<td class="' + (c.r ? "r" : "") + '">' + c.f(h) + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>" +
+      '<p class="small muted">ที่มา ' + k1() + ": RS/NWC/NI/EBITDA/เงินบำรุง " + CS.pages.moph + "–" + CS.pages.r8 + " · 7 Plus/ACP/APP " + CS.pages.plus7 + " · TPS Q2Y69 " + CS.pages.tps + " · Planfin " + CS.pages.planfin + " · ครองเตียง/CMI " + CS.pages.prod + " · ติด C (1 ต.ค. 68 – 30 ก.ค. 69) " + CS.pages.claimC + "</p></section>" +
+      '<section class="sheet stack"><h2>แบบฝึก (ตำราบทที่ 5.5)</h2><ul class="small"><li>จัดกลุ่ม 21 แห่ง: ปกติ (RS 0–1) / เฝ้าระวัง (2–5) / วิกฤต (6–7) ทั้ง 2 เกณฑ์ แล้วอธิบายว่าทำไมผลต่างกัน</li>' +
+      "<li>เลือก 1 รพ. จากกลุ่ม “RS ต่ำแต่เงินบำรุงติดลบ” (" + esc(hidden.join(", ")) + ") แล้วเขียนว่าความเสี่ยงที่ซ่อนอยู่คืออะไร</li>" +
+      "<li>เทียบ ACP-UC กับจำนวนติด C — รพ. ที่ทั้งสองค่าสูง ควรเริ่ม RCA ที่ขั้นไหนของ Revenue cycle</li></ul></section>";
+  }
+  function caseDetailView() {
+    var h = HS[caseDetail], m = h.moph, p7 = h.plus7, pf = h.planfin, res = caseScore(h);
+    var opts = HS.map(function (x, i) { return "<option value=\"" + i + "\"" + (i === caseDetail ? " selected" : "") + ">" + esc(x.code) + " · ระดับ " + esc(x.prod.level) + "</option>"; }).join("");
+    function rowv(label, val, bad, note) { return "<tr><td>" + label + '</td><td class="r num' + (bad ? " neg" : "") + '">' + val + '</td><td class="small muted">' + (note || "") + "</td></tr>"; }
+    var inf = {}; C.plus7_k1.items.forEach(function (x) { inf[x.id] = x.rule; });
+    return '<div class="row"><label for="cdSel" class="small muted">โรงพยาบาล</label><select id="cdSel" class="inp" style="width:auto">' + opts + '</select><button class="btn" id="cdPlan">ร่าง Action plan จาก รพ. นี้ →</button></div>' +
+      '<div class="grid2"><section class="sheet stack"><h2>Risk Score 3 เกณฑ์</h2><div class="breakdown">' +
+      "<div><div class=\"small muted\">กระทรวง (NI)</div>" + rsPill(m.rs) + '<div class="small muted num">' + m.li + " + " + m.st + " + " + m.su + "</div></div>" +
+      "<div><div class=\"small muted\">เขต 8 (NI)</div>" + rsPill(h.r8ni.rs) + "</div><div><div class=\"small muted\">เขต 8 (EBITDA)</div>" + rsPill(h.r8eb.rs) + "</div></div>" +
+      '<div class="scroll-x"><table><tbody>' + rowv("CR / QR / Cash", ["cr", "qr", "cash"].map(function (k, i) { var th = [1.5, 1.0, 0.8][i]; return '<span class="' + (m[k] < th ? "neg" : "") + '">' + m[k].toFixed(2) + "</span>"; }).join(" / "), false, "เขต 8: " + h.r8ni.cr.toFixed(2) + " / " + h.r8ni.qr.toFixed(2) + " / " + h.r8ni.cash.toFixed(2)) +
+      rowv("NWC (ลบ.)", mb(m.nwc), m.nwc < 0, "เขต 8: " + mb(h.r8ni.nwc)) + rowv("NI 9 เดือน (ลบ.)", mb(m.ni), m.ni < 0, "เขต 8: " + mb(h.r8ni.ni)) +
+      rowv("EBITDA (ลบ.)", mb(h.ebitda), h.ebitda < 0, "") + rowv("เงินบำรุงหลังหักหนี้ (ลบ.)", mb(h.netCash), h.netCash < 0, "") + "</tbody></table></div>" +
+      '<p class="small muted">' + esc(levelOf(m.rs).meaning) + " · สูตรในแอปได้ " + res.total + " " + k1() + "</p></section>" +
+      '<section class="sheet stack"><h2>7 Plus Efficiency · ' + esc(p7.grade) + " " + (p7.pass ? '<span class="pill pass">ผ่าน</span>' : '<span class="pill fail">ไม่ผ่าน</span>') + '</h2><div class="scroll-x"><table><tbody>' +
+      rowv("OPM % (ค่าเฉลี่ยกลุ่ม)", p7.opm.toFixed(2) + " (" + p7.opmAvg.toFixed(2) + ")", p7.opm < p7.opmAvg, inf.OPM) +
+      rowv("ROA % (ค่าเฉลี่ยกลุ่ม)", p7.roa.toFixed(2) + " (" + p7.roaAvg.toFixed(2) + ")", p7.roa < p7.roaAvg, inf.ROA) +
+      rowv("APP-Drug วัน", p7.app, p7.app > 145, inf["APP-Drug"]) + rowv("ACP-UC วัน", p7.acpUC, p7.acpUC > 60, inf["ACP-UC"]) +
+      rowv("ACP-CSMBS วัน", p7.acpCS, p7.acpCS > 60, inf["ACP-CSMBS"]) + rowv("ACP-SSS วัน", p7.acpSS, p7.acpSS > 120, inf["ACP-SSS"]) + rowv("IM วัน", p7.im, p7.im > 60, inf.IM) +
+      '</tbody></table></div><p class="small muted">' + esc(C.plus7_k1.note) + "</p></section></div>" +
+      '<section class="sheet stack"><h2>แนวโน้ม NWC และเงินบำรุง Q4Y65 → Q3Y69</h2>' + trendSvg(h) + "</section>" +
+      '<section class="sheet stack"><h2>Planfin · Productivity · เคลม</h2><div class="scroll-x"><table><tbody>' +
+      rowv("รายได้จริง vs แผนตามสัดส่วน 9 เดือน", (pf.revPct > 0 ? "+" : "") + pf.revPct.toFixed(2) + "%", !pf.revPass, mb(pf.revAct) + " / " + mb(pf.revPro) + " ลบ.") +
+      rowv("ค่าใช้จ่ายจริง vs แผน", (pf.expPct > 0 ? "+" : "") + pf.expPct.toFixed(2) + "%", !pf.expPass, mb(pf.expAct) + " / " + mb(pf.expPro) + " ลบ.") +
+      rowv("Planfin ภาพรวม", pf.pass ? "ผ่าน" : "ไม่ผ่าน", !pf.pass, "±5% อย่างน้อย 1 ช่อง") +
+      rowv("TPS Q2Y69", h.tps.score + " (" + h.tps.q1 + " → " + h.tps.q2 + ")", h.tps.score < 10.5, "ผ่าน ≥ 10.5 (เกรด B)") +
+      rowv("อัตราครองเตียง %", h.prod.occ.toFixed(2), h.prod.occ < 80, "เกณฑ์ ≥ 80 · " + h.prod.beds + " เตียง") +
+      rowv("CMI", h.prod.cmi.toFixed(3), h.prod.cmi < h.prod.cmiCrit, "เกณฑ์ระดับ " + h.prod.level + " ≥ " + h.prod.cmiCrit) +
+      rowv("Sum AdjRW (ต.ค.–มิ.ย.)", fmtBaht(h.prod.sumAdjRW, 2), false, "") +
+      rowv("ติด C สะสม (รายการ)", fmtBaht(h.claimC), false, "1 ต.ค. 68 – 30 ก.ค. 69") +
+      '</tbody></table></div><p class="small muted">' + k1() + " · ตัวแดง = ไม่ผ่านเกณฑ์/ติดลบ</p></section>";
+  }
+  AFTER["case"] = function (root) {
+    $$("[data-ctab]", root).forEach(function (b) { b.onclick = function () { caseTab = b.getAttribute("data-ctab"); route(); }; });
+    $$("[data-csort]", root).forEach(function (b) { b.onclick = function () { var k = b.getAttribute("data-csort"); caseSort = { k: k, dir: caseSort.k === k ? -caseSort.dir : (k === "code" || k === "lv" ? 1 : -1) }; route(); }; });
+    $$("[data-cdet]", root).forEach(function (a) { a.onclick = function (e) { e.preventDefault(); caseDetail = Number(a.getAttribute("data-cdet")); caseTab = "detail"; route(); }; });
+    ["li", "st", "su"].forEach(function (k) { var el = $("#g_" + k, root); if (el) el.onchange = function () { caseGuess[k] = el.value; }; });
+    var chk = $("#gCheck", root);
+    if (chk) chk.onclick = function () {
+      if (caseGuess.li === "" || caseGuess.st === "" || caseGuess.su === "") { toast("เลือกคะแนนให้ครบ 3 มิติก่อน"); return; }
+      var h = HS[casePick], ok = Number(caseGuess.li) === h.moph.li && Number(caseGuess.st) === h.moph.st && Number(caseGuess.su) === h.moph.su;
+      S.caseDone = S.caseDone || {}; S.caseDone[h.code] = ok; save();
+      caseReveal = true; route();
+    };
+    var nx = $("#gNext", root); if (nx) nx.onclick = function () { pickRandom(); route(); };
+    var cs = $("#cdSel", root); if (cs) cs.onchange = function () { caseDetail = Number(cs.value); route(); };
+    var cp = $("#cdPlan", root);
+    if (cp) cp.onclick = function () {
+      var h = HS[caseDetail], m = h.moph, p7 = h.plus7, rows = [];
+      var worst = Math.max(m.rs, h.r8ni.rs, h.r8eb.rs);
+      if (worst >= 4 || h.netCash < 0) rows.push({ problem: "Risk Score กระทรวง " + m.rs + " / เขต 8 " + h.r8ni.rs + " · เงินบำรุงหลังหักหนี้ " + mb(h.netCash) + " ลบ. (มิ.ย. 69)", track: "งบการเงินรายไตรมาส (hfo) · Risk Score เขต 8" });
+      if (p7.acpUC > 60) rows.push({ problem: "ACP-UC " + p7.acpUC + " วัน (เกณฑ์ 60) · ติด C สะสม " + fmtBaht(h.claimC) + " รายการ", target: "ACP-UC ≤ 60 วัน", track: "e-Claim / FDH รายเดือน" });
+      if (p7.app > 145) rows.push({ problem: "APP-Drug " + p7.app + " วัน", track: "รายงานเจ้าหนี้ค่ายา / หนี้ค้าง อภ." });
+      if (!h.planfin.revPass) rows.push({ problem: "รายได้จริงต่างจาก Planfin " + h.planfin.revPct.toFixed(2) + "% (เกณฑ์ ±5%)", track: "Planfin รายไตรมาส" });
+      if (h.prod.occ < 80) rows.push({ problem: "อัตราครองเตียง " + h.prod.occ.toFixed(1) + "% (เกณฑ์ 80%)", target: "≥ 80%", track: "HDC / รายงานผู้ป่วยใน" });
+      if (!rows.length) rows.push({ problem: "ไม่พบตัวชี้วัดที่หลุดเกณฑ์หลัก — เลือกตัวชี้วัดเพื่อพัฒนาต่อ" });
+      S.plan = { hospital: h.code + " (กรณีศึกษา K1)", period: "ข้อมูล ณ มิ.ย. 2569", rows: rows }; save();
+      location.hash = "plan";
+    };
+  };
+
   // ------------------------------------------------------------ SOURCES
   RENDER.sources = function () {
     var src = Object.keys(C.sources).map(function (k) {
@@ -766,7 +963,7 @@
       return "<tr><td>" + srcTag(k) + "</td><td>" + (s.url ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + "</a>" : esc(s.title)) + '</td><td class="small muted">' + esc(s.kind) + "</td></tr>";
     }).join("");
     var eff = C.efficiency.map(function (e) {
-      return "<tr><td><b>" + esc(e.id) + '</b><div class="small muted">' + esc(e.name) + '</div></td><td class="small">' + esc(e.formula) + "</td><td>" + esc(e.rule) + "</td><td>" + srcTag(e.src) + "</td></tr>";
+      return "<tr><td><b>" + esc(e.id) + '</b><div class="small muted">' + esc(e.name) + '</div></td><td class="small">' + esc(e.formula) + "</td><td>" + esc(e.rule) + "</td><td>" + srcTag(e.src) + (e.src_also ? " " + srcTag(e.src_also) : "") + "</td></tr>";
     }).join("");
     var rat = C.ratios.map(function (c) { return "<tr><td><b>" + esc(c.id === "CASH" ? "Cash" : c.id) + '</b></td><td class="small">' + esc(c.formula) + '</td><td class="num">' + esc(c.op + " " + (c.unit === "บาท" ? c.threshold : c.threshold.toFixed(1))) + "</td><td>" + c.points + "</td><td>" + srcTag(c.src) + "</td></tr>"; }).join("");
     var lv = C.levels.map(function (l) { return '<tr><td class="num">' + esc(l.label) + "</td><td>" + esc(l.meaning) + "</td></tr>"; }).join("");
@@ -778,6 +975,10 @@
       '<section class="sheet stack"><h2>ประเภทลูกหนี้ตามสิทธิ (แบบรายงาน จ.อุดรธานี) ' + srcTag(C.receivable_types.src) + "</h2><ol>" + C.receivable_types.items.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ol></section></div>" +
       '<section class="sheet stack"><h2>เกณฑ์ประสิทธิภาพที่พบในเอกสาร (ยังต้องยืนยันฉบับทางการ)</h2><div class="scroll-x"><table><thead><tr><th>ตัวชี้วัด</th><th>สูตร</th><th>เกณฑ์</th><th>ที่มา</th></tr></thead><tbody>' + eff + "</tbody></table></div>" +
       '<p class="small">' + esc(C.risk_scoring_plus.text) + " " + srcTag(C.risk_scoring_plus.src) + "</p></section>" +
+      '<section class="sheet stack"><h2>เกณฑ์ที่ จ.อุดรธานีใช้ (กวป. ก.ค. 69) ' + srcTag("K1") + '</h2><p class="small">' + esc(C.rs_variants.text) + '</p><p class="small muted">' + esc(C.rs_variants.open_question) + " · " + esc(C.rs_variants.app_uses) + "</p>" +
+      '<div class="scroll-x"><table><thead><tr><th>ตัวชี้วัด</th><th>เกณฑ์</th><th>หน้า</th></tr></thead><tbody>' + C.province_k1.map(function (x) { return "<tr><td><b>" + esc(x.name) + "</b></td><td>" + esc(x.rule) + '</td><td class="small muted">' + esc(x.page) + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+      '<h3 style="font-size:1rem">7 Plus รายตัวชี้วัด (อนุมาน)</h3><p class="small muted">' + esc(C.plus7_k1.note) + " · " + esc(C.plus7_k1.target) + '</p><div class="scroll-x"><table><thead><tr><th>ตัวชี้วัด</th><th>เกณฑ์ที่อนุมาน</th><th class="r">ผ่าน</th></tr></thead><tbody>' +
+      C.plus7_k1.items.map(function (x) { return "<tr><td>" + esc(x.id) + "</td><td>" + esc(x.rule) + '</td><td class="r num">' + esc(x.passed) + "</td></tr>"; }).join("") + "</tbody></table></div></section>" +
       '<section class="sheet stack"><h2>แหล่งอ้างอิง</h2><div class="scroll-x"><table><tbody>' + src + "</tbody></table></div>" +
       '<p class="small muted">ทุกแหล่งเป็นเอกสารนำเสนอ/รายงานของหน่วยงาน สธ. ที่เผยแพร่ ไม่ใช่ประกาศฉบับทางการ · เนื้อหาตำรา: ' + esc(D.meta.textbook) + " · คู่มือ: " + esc(D.meta.manual) + " · ศัพท์: " + esc(D.glossary.sources.G1) + "</p></section>";
   };
