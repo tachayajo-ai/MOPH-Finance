@@ -83,9 +83,26 @@
       } else fb();
     } catch (e) { fb(); }
   }
+  // ดาวน์โหลด: ใน claude.ai ใช้ capability "downloads" (ผู้ใช้ยืนยันก่อนบันทึก) · เปิดไฟล์ในเครื่องใช้ลิงก์ปกติ
+  var DL = null;
+  try {
+    if (window.claude && typeof window.claude.use === "function") {
+      window.claude.use("downloads").then(function (ns) { DL = ns; }, function () {});
+    }
+  } catch (e) {}
   function download(name, text, mime) {
+    var data = "\ufeff" + text; // BOM ให้ Excel อ่านภาษาไทยถูก
+    if (DL) {
+      DL.save({ filename: name, data: data }).then(function () { toast("บันทึกไฟล์แล้ว: " + name); }, function (err) {
+        var code = err && err.code;
+        if (code === "declined") toast("ยกเลิกการบันทึกไฟล์");
+        else if (code === "rate_limited") toast("มีหน้าต่างยืนยันค้างอยู่ — ลองใหม่อีกครั้ง");
+        else toast("ดาวน์โหลดไม่ได้ในหน้านี้ — ใช้ปุ่มคัดลอกแทน");
+      });
+      return;
+    }
     try {
-      var blob = new Blob(["﻿" + text], { type: mime || "text/plain;charset=utf-8" });
+      var blob = new Blob([data], { type: mime || "text/plain;charset=utf-8" });
       var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
       document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     } catch (e) { toast("ดาวน์โหลดไม่ได้ในหน้านี้ — ใช้ปุ่มคัดลอกแทน"); }
