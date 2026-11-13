@@ -102,6 +102,45 @@
     } while (s !== prev);
     return s.replace(/\\times/g, "×").replace(/\\approx/g, "≈").replace(/\\,/g, " ").replace(/[{}]/g, "").trim();
   }
+  // ------------------------------------------------------------ mind map
+  // รูปแบบ: บรรทัดแรก = หัวข้อกลาง · "- " = กิ่ง · "  - " = ใบ
+  function mindmap(src) {
+    var lines = src.split("\n").filter(function (l) { return l.trim(); });
+    var root = lines.shift().trim(), branches = [];
+    lines.forEach(function (l) {
+      if (/^- /.test(l)) branches.push({ t: l.slice(2).trim(), leaves: [] });
+      else if (/^\s+- /.test(l) && branches.length) branches[branches.length - 1].leaves.push(l.replace(/^\s+- /, "").trim());
+    });
+    var half = Math.ceil(branches.length / 2);
+    function card(b, i, side) {
+      return '<div class="mm-branch ' + side + '" style="--c:var(--m' + (i % 6 + 1) + ')"><div class="mm-title">' + inline(b.t) + "</div>" +
+        (b.leaves.length ? "<ul>" + b.leaves.map(function (x) { return "<li>" + inline(x) + "</li>"; }).join("") + "</ul>" : "") + "</div>";
+    }
+    var left = branches.slice(0, half).map(function (b, i) { return card(b, i, "left"); }).join("");
+    var right = branches.slice(half).map(function (b, i) { return card(b, i + half, "right"); }).join("");
+    return '<figure class="mindmap" aria-label="แผนผังความคิด: ' + esc(root) + '"><svg class="mm-lines" aria-hidden="true"></svg>' +
+      '<div class="mm-grid"><div class="mm-col">' + left + '</div><div class="mm-center"><div class="mm-root">' + inline(root) + '</div></div><div class="mm-col">' + right + "</div></div></figure>";
+  }
+  function drawMindmaps(scope) {
+    $$(".mindmap", scope || document).forEach(function (fig) {
+      var svg = fig.querySelector(".mm-lines"), rootEl = fig.querySelector(".mm-root");
+      var box = fig.getBoundingClientRect();
+      svg.setAttribute("width", box.width); svg.setAttribute("height", box.height);
+      svg.setAttribute("viewBox", "0 0 " + box.width + " " + box.height);
+      if (getComputedStyle(svg).display === "none" || !box.width) { svg.innerHTML = ""; return; }
+      var r = rootEl.getBoundingClientRect(), cy = r.top + r.height / 2 - box.top;
+      svg.innerHTML = $$(".mm-branch", fig).map(function (b) {
+        var t = b.querySelector(".mm-title").getBoundingClientRect(), left = b.classList.contains("left");
+        var x1 = left ? r.left - box.left : r.right - box.left;
+        var x2 = left ? t.right - box.left : t.left - box.left, y2 = t.top + t.height / 2 - box.top;
+        var mx = (x1 + x2) / 2;
+        return '<path d="M' + x1 + " " + cy + " C" + mx + " " + cy + " " + mx + " " + y2 + " " + x2 + " " + y2 + '" fill="none" stroke="' + getComputedStyle(b).getPropertyValue("--c") + '" stroke-width="2.5" stroke-linecap="round"/>';
+      }).join("");
+    });
+  }
+  var mmTimer = null;
+  window.addEventListener("resize", function () { clearTimeout(mmTimer); mmTimer = setTimeout(function () { drawMindmaps(); }, 120); });
+
   function md(src, taskPrefix) {
     var lines = src.split("\n"), html = [], i = 0, task = 0, para = [];
     function flush() { if (para.length) { html.push("<p>" + inline(para.join(" ")) + "</p>"); para = []; } }
@@ -123,6 +162,7 @@
         while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
         i++;
         var body = buf.join("\n");
+        if (lang === "mindmap") { html.push(mindmap(body)); continue; }
         html.push('<div class="formula">' + esc(lang === "latex" ? latexToText(body) : body) + "</div>");
         continue;
       }
@@ -242,6 +282,8 @@
     var main = $("#main");
     main.innerHTML = '<div class="page">' + RENDER[id]() + "</div>";
     if (AFTER[id]) AFTER[id](main);
+    drawMindmaps(main);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { drawMindmaps(main); });
     window.scrollTo(0, 0);
   }
   var AFTER = {};
