@@ -55,6 +55,7 @@ content/manual.html      คู่มือระบบประกันสุ�
 data/criteria.json       เกณฑ์ Ratio / Risk Score / Efficiency / แหล่งอ้างอิง
 data/quiz.json           คำถามแนวคิด
 data/glossary.json       ศัพท์ (แปลงจาก sources/*.docx)
+data/concept_cards.json  Flashcards แนวคิดบทที่ 3–7 (หมวด 0.3–0.7)
 data/casestudy.json      ข้อมูล 21 รพ. จาก กวป. ก.ค. 69 — ชื่อ รพ. เป็นรหัส (ไม่เก็บตารางเทียบชื่อใน repo)
 src/                     template, CSS, JS (vanilla ไม่มี dependency)
 tools/                   build.py, import_docx.py

@@ -38,6 +38,13 @@ def textbook_glossary(md):
     return terms
 
 
+def concept_cards():
+    """Flashcards แนวคิดบทที่ 3–7 (data/concept_cards.json) เป็นหมวด 0.3–0.7"""
+    d = json.loads(read("data/concept_cards.json"))
+    return [{"term": c["term"], "full": c["full"], "meaning": c["meaning"],
+             "cat": d["chapters"][str(c["ch"])], "src": "T"} for c in d["cards"]]
+
+
 def check_pdpa(text, name):
     bad = re.findall(r"(?<!\d)\d{13}(?!\d)|\b(?:HN|AN)\s*[:#]?\s*\d{4,}", text)
     # ตัวเลข 13 หลักที่มาจาก URL ของเอกสาร (timestamp) ไม่ใช่ข้อมูลบุคคล
@@ -54,7 +61,10 @@ def main():
     quiz = json.loads(read("data/quiz.json"))
     glossary = json.loads(read("data/glossary.json"))
     casestudy = json.loads(read("data/casestudy.json"))
-    glossary["terms"] = textbook_glossary(textbook) + glossary["terms"]
+    cc, base = concept_cards(), textbook_glossary(textbook) + glossary["terms"]
+    dup = {c["term"] for c in cc} & {t["term"] for t in base}
+    assert not dup and len({c["term"] for c in cc}) == len(cc), f"การ์ดแนวคิดชื่อซ้ำ (สถานะ 'จำได้แล้ว' ผูกกับคำ): {dup}"
+    glossary["terms"] = base[:len(textbook_glossary(textbook))] + cc + glossary["terms"]
 
     for name, text in (("textbook.md", textbook), ("manual.html", manual),
                        ("casestudy.json", json.dumps(casestudy, ensure_ascii=False))):
