@@ -108,6 +108,16 @@
     function cells(l) { return l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(function (c) { return c.trim(); }); }
     while (i < lines.length) {
       var l = lines[i];
+      var fold = /^:::\s*(\S.*)$/.exec(l);
+      if (fold) {
+        // บล็อกพับได้  ::: ดูเฉลย  ...  :::
+        flush(); var inner = []; i++;
+        while (i < lines.length && !/^:::\s*$/.test(lines[i])) inner.push(lines[i++]);
+        i++;
+        var sub = md(inner.join("\n"), null);
+        html.push('<details class="fold"><summary>' + inline(fold[1]) + "</summary>" + sub + "</details>");
+        continue;
+      }
       if (/^```/.test(l)) {
         flush(); var lang = l.slice(3).trim(), buf = []; i++;
         while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
